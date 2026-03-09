@@ -1,0 +1,49 @@
+identity:
+  name: "tm"
+  author: "lfenghx"
+  label:
+    en_US: "skill manager"
+    zh_Hans: "技能管理"
+    pt_BR: "skill manager"
+    ja_JP: "skill manager"
+description:
+  human:
+    en_US: "Manage local skill packages (add/delete/list/download/dependencies)."
+    zh_Hans: "管理本地 skills 技能包：新增/删除/查看/下载/依赖安装"
+    pt_BR: "Gerenciar pacotes de habilidades locais (adicionar/remover/visualizar/baixar/dependências)."
+    ja_JP: "ローカルのスキルパッケージを管理（追加/削除/表示/ダウンロード/依存関係のインストール）"
+  llm: "Manage local skill packages (add/delete/list/download/dependencies)"
+parameters:
+  - name: command
+    type: string
+    required: true
+    label:
+      en_US: Command
+      zh_Hans: 命令
+      pt_BR: Command
+      ja_JP: コマンド
+    human_description:
+      en_US: "supported commands: add, delete, list, download, dependencies"
+      zh_Hans: "支持：查看技能、新增技能、删除技能N、下载技能N、依赖安装"
+      pt_BR: "Gerenciar pacotes de habilidades locais (adicionar/remover/visualizar/baixar/dependências)."
+      ja_JP: "ローカルのスキルパッケージを管理（追加/削除/表示/ダウンロード/依存関係のインストール）"
+    llm_description: "supported commands: add, delete, list, download, dependencies"
+    form: llm
+  - name: files
+    type: files
+    required: false
+    label:
+      en_US: Zip files
+      zh_Hans: Zip压缩包
+      pt_BR: Zip files
+      ja_JP: Zipファイル
+    human_description:
+      en_US: "Zip package(s) for add command."
+      zh_Hans: "新增技能时上传 zip 压缩包"
+      pt_BR: "Zip package(s) for add command."
+      ja_JP: "新增技能 用の zip"
+    llm_description: "Zip package(s) for add command"
+    form: form
+extra:
+  python:
+    source: tools/TM.py
