@@ -39,6 +39,8 @@ This plugin provides two tools:
 3. Build a workflow like the example below:
 
    ![alt text](_assets/image_1.png)
+   ![alt text](_assets/image_1-1.png)
+   ![alt text](_assets/image_1-2.png)
 
 4. Chat with Mini_Claw and set up a persona:
 
