@@ -614,10 +614,10 @@ class SkillAgentTool(Tool):
             file_items = [tool_parameters.get("file")]
 
         uploads_context = ""
+        uploaded: list[dict[str, Any]] = []
         if file_items:
             uploads_dir = _safe_join(session_dir, "uploads")
             os.makedirs(uploads_dir, exist_ok=True)
-            uploaded: list[dict[str, Any]] = []
             for item in file_items:
                 url, name = _extract_url_and_name(item)
                 if not url:
@@ -647,13 +647,27 @@ class SkillAgentTool(Tool):
                         mime = _guess_mime_type(filename)
                     except Exception:
                         mime = None
+                _, ext = os.path.splitext(filename)
+                fmt = (ext or "").lstrip(".").lower().strip()
+                if not fmt:
+                    fmt = "image"
+                base64_data = ""
+                mime_norm = str(mime or "").strip().lower()
+                if mime_norm.startswith("image/") and len(content) <= 3_000_000:
+                    try:
+                        base64_data = base64.b64encode(content).decode("ascii")
+                    except Exception:
+                        base64_data = ""
                 uploaded.append(
                     {
                         "relative_path": rel_path,
+                        "abs_path": abs_path,
                         "bytes": len(content),
                         "mime_type": mime or "",
                         "filename": filename,
                         "source_url": str(url),
+                        "format": fmt,
+                        "base64_data": base64_data,
                     }
                 )
             if uploaded:
@@ -706,7 +720,147 @@ class SkillAgentTool(Tool):
         )
 
         messages: list[Any] = [SystemPromptMessage(content=system_content)]
-        messages.append(UserPromptMessage(content=effective_query))
+
+        image_entries: list[dict[str, Any]] = []
+        for f in uploaded:
+            if not isinstance(f, dict):
+                continue
+            mime = str(f.get("mime_type") or "").strip().lower()
+            if mime and not mime.startswith("image/"):
+                continue
+            image_entries.append(
+                {
+                    "filename": str(f.get("filename") or "").strip(),
+                    "mime_type": mime or "image/*",
+                    "format": str(f.get("format") or "").strip().lower() or "image",
+                    "source_url": str(f.get("source_url") or "").strip(),
+                    "abs_path": str(f.get("abs_path") or "").strip(),
+                    "bytes": int(f.get("bytes") or 0),
+                    "base64_data": str(f.get("base64_data") or "").strip(),
+                }
+            )
+        image_entries = image_entries[:4]
+        if uploaded:
+            try:
+                img_bytes_total = sum(int(e.get("bytes") or 0) for e in image_entries)
+            except Exception:
+                img_bytes_total = 0
+            _dbg(
+                "vision_inputs "
+                + json.dumps(
+                    {
+                        "uploaded_total": len(uploaded),
+                        "images_selected": len(image_entries),
+                        "images_bytes_total": img_bytes_total,
+                        "images": [
+                            {
+                                "filename": str(e.get("filename") or ""),
+                                "bytes": int(e.get("bytes") or 0),
+                                "has_url": bool(str(e.get("source_url") or "").strip()),
+                                "has_b64": bool(str(e.get("base64_data") or "").strip()),
+                            }
+                            for e in image_entries
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        def _ensure_base64_data(entry: dict[str, Any]) -> str:
+            b64 = str(entry.get("base64_data") or "").strip()
+            if b64:
+                return b64
+            path = str(entry.get("abs_path") or "").strip()
+            if not path or not os.path.isfile(path):
+                return ""
+            try:
+                with open(path, "rb") as f:
+                    raw = f.read()
+                b64 = base64.b64encode(raw).decode("ascii")
+            except Exception:
+                return ""
+            entry["base64_data"] = b64
+            return b64
+
+        def build_user_message(*, text: str, mode: str) -> Any:
+            if mode in {"default", "all_base64"} and image_entries:
+                vision_hint = "你已收到用户上传的图片，请直接查看并分析图片内容（不要声称无法查看图片）。\n"
+                parts: list[dict[str, Any]] = [{"type": "text", "data": vision_hint + str(text or "")}]
+                picked: list[dict[str, Any]] = []
+                for e in image_entries:
+                    if mode == "all_base64":
+                        b64 = _ensure_base64_data(e)
+                        if b64:
+                            parts.append(
+                                {
+                                    "type": "image",
+                                    "format": e.get("format") or "image",
+                                    "base64_data": b64,
+                                    "mime_type": e.get("mime_type") or "image/*",
+                                    "filename": e.get("filename") or "",
+                                }
+                            )
+                            picked.append(
+                                {
+                                    "filename": str(e.get("filename") or ""),
+                                    "pick": "base64_force",
+                                    "bytes": int(e.get("bytes") or 0),
+                                }
+                            )
+                            continue
+                    bytes_len = int(e.get("bytes") or 0)
+                    b64 = str(e.get("base64_data") or "").strip()
+                    if bytes_len > 0 and bytes_len <= 3_000_000 and b64:
+                        parts.append(
+                            {
+                                "type": "image",
+                                "format": e.get("format") or "image",
+                                "base64_data": b64,
+                                "mime_type": e.get("mime_type") or "image/*",
+                                "filename": e.get("filename") or "",
+                            }
+                        )
+                        picked.append(
+                            {
+                                "filename": str(e.get("filename") or ""),
+                                "pick": "base64",
+                                "bytes": bytes_len,
+                            }
+                        )
+                        continue
+                    url = str(e.get("source_url") or "").strip()
+                    if url:
+                        parts.append(
+                            {
+                                "type": "image",
+                                "format": e.get("format") or "image",
+                                "url": url,
+                                "mime_type": e.get("mime_type") or "image/*",
+                                "filename": e.get("filename") or "",
+                            }
+                        )
+                        picked.append(
+                            {
+                                "filename": str(e.get("filename") or ""),
+                                "pick": "url",
+                                "bytes": bytes_len,
+                            }
+                        )
+                if picked:
+                    _dbg(
+                        "vision_message_built "
+                        + json.dumps(
+                            {
+                                "mode": mode,
+                                "picked_images": picked,
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                return UserPromptMessage(content=parts)
+            return UserPromptMessage(content=str(text or ""))
+
+        messages.append(build_user_message(text=effective_query, mode="default"))
 
         conversation_summary: str = ""
 
@@ -722,7 +876,7 @@ class SkillAgentTool(Tool):
                 acc: list[str] = []
                 for item in content:
                     if isinstance(item, dict):
-                        t = item.get("text") or item.get("content") or ""
+                        t = item.get("text") or item.get("content") or item.get("data") or ""
                         if t:
                             acc.append(str(t))
                     elif item:
@@ -1132,7 +1286,11 @@ class SkillAgentTool(Tool):
         agent_tag_header = build_agent_tag_header()
 
         def invoke_llm_live(
-            *, prompt_messages: list[Any], tools: list[Any] | None
+            *,
+            prompt_messages: list[Any],
+            tools: list[Any] | None,
+            fallback_prompt_messages: list[Any] | None = None,
+            alt_prompt_messages: list[Any] | None = None,
         ) -> Generator[ToolInvokeMessage, None, tuple[str, list[Any], Any, int, bool]]:
             nontext_content: list[dict[str, Any]] = []
             tool_calls_all: list[Any] = []
@@ -1163,18 +1321,28 @@ class SkillAgentTool(Tool):
                     return False
                 return True
 
-            try:
+            def _invoke_once(pm: list[Any]) -> Generator[ToolInvokeMessage, None, tuple[str, list[Any], Any, int, bool]]:
+                nonlocal nontext_content, tool_calls_all, text_parts, chunks_count, streamed_any, saw_tool_calls, emitted_prefix, emitted_len
+                nontext_content = []
+                tool_calls_all = []
+                text_parts = []
+                chunks_count = 0
+                streamed_any = False
+                saw_tool_calls = False
+                emitted_prefix = False
+                emitted_len = 0
+
                 try:
                     response = self.session.model.llm.invoke(
                         model_config=model,
-                        prompt_messages=prompt_messages,
+                        prompt_messages=pm,
                         tools=tools,
                         stream=True,
                     )
                 except TypeError:
                     response = self.session.model.llm.invoke(
                         model_config=model,
-                        prompt_messages=prompt_messages,
+                        prompt_messages=pm,
                         stream=True,
                     )
 
@@ -1229,7 +1397,47 @@ class SkillAgentTool(Tool):
                 elif combined_text and not saw_tool_calls and should_emit_user_text(combined_text):
                     yield from emit_typing(combined_text)
                 return combined_text, tool_calls_all, nontext_content, chunks_count, streamed_any
+
+            try:
+                return (yield from _invoke_once(prompt_messages))
             except Exception as e:
+                msg = str(e)
+                prefer_alt = (
+                    "Download multimodal file timed out" in msg
+                    or "InvalidParameter" in msg
+                    or "multimodal file" in msg.lower()
+                    or "timed out" in msg.lower()
+                )
+                _dbg(
+                    "vision_invoke_failed "
+                    + json.dumps(
+                        {
+                            "prefer_alt": bool(prefer_alt),
+                            "has_alt": alt_prompt_messages is not None,
+                            "has_fallback": fallback_prompt_messages is not None,
+                            "exception": _shorten_text(msg, 400),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                if prefer_alt and alt_prompt_messages is not None:
+                    try:
+                        _dbg("vision_invoke_retry alt=all_base64")
+                        return (yield from _invoke_once(alt_prompt_messages))
+                    except Exception:
+                        pass
+                if fallback_prompt_messages is not None:
+                    try:
+                        _dbg("vision_invoke_retry fallback=text_only")
+                        return (yield from _invoke_once(fallback_prompt_messages))
+                    except Exception as e2:
+                        return (
+                            "",
+                            [],
+                            {"error": "stream_parse_failed", "exception": str(e2), "primary_exception": str(e)},
+                            chunks_count,
+                            streamed_any,
+                        )
                 return "", [], {"error": "stream_parse_failed", "exception": str(e)}, chunks_count, streamed_any
 
         loop_history_size = 30
@@ -1263,10 +1471,26 @@ class SkillAgentTool(Tool):
                     f"step={step_idx+1}/{max_tool_turns} messages={len(messages)} "
                     f"est_tokens={estimate_prompt_tokens(messages)}"
                 )
+                fallback_messages = None
+                alt_messages = None
+                if image_entries and len(messages) >= 2:
+                    u = messages[1]
+                    c = getattr(u, "content", None)
+                    if isinstance(c, list) and any(isinstance(it, dict) and it.get("type") == "image" for it in c):
+                        alt_messages = list(messages)
+                        alt_messages[1] = build_user_message(text=str(effective_query or ""), mode="all_base64")
+                        fallback_messages = list(messages)
+                        fallback_messages[1] = build_user_message(
+                            text=str(effective_query or "")
+                            + "\n\n（注意：本次图片未能以视觉输入方式传入，只能通过 uploads/ 文件路径处理）",
+                            mode="text",
+                        )
                 try:
                     res_text, tool_calls, nontext, chunks, streamed_any = yield from invoke_llm_live(
                         prompt_messages=messages,
                         tools=_build_prompt_message_tools(TOOL_SCHEMAS, PromptMessageTool),
+                        fallback_prompt_messages=fallback_messages,
+                        alt_prompt_messages=alt_messages,
                     )
                 except Exception as e:
                     msg = str(e)
