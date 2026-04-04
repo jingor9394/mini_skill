@@ -1,7 +1,7 @@
 ## Mini Claw
 
 **Author:** lfenghx  
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Type:** Tool (Tool Plugin)
 
 ### Overview
@@ -93,6 +93,8 @@ Feature 4: The Dify `plugin_daemon` container does not include Node.js by defaul
 ### Release Notes
 
 - 1.0.0: Mini Claw official release
+- 1.1.0: Multi-user interactions; user memory isolation
+- 1.2.0: Multimodal support; usage statistics; improved skill package compatibility
 
 ### FAQ
 

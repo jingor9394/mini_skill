@@ -130,6 +130,23 @@ parameters:
       ja_JP: 無効にすると、コマンド実行で承認確認を求めません。
     llm_description: Toggle whether command execution requires interactive approval.
     form: form
+
+  - name: show_usage_text
+    type: boolean
+    required: true
+    default: false
+    label:
+      en_US: Show usage text
+      zh_Hans: 显示用量文本
+      pt_BR: Show usage text
+      ja_JP: 使用量テキスト表示
+    human_description:
+      en_US: When enabled, show token/cost usage summary in the chat output.
+      zh_Hans: 打开后，会在对话中输出 token/费用 用量统计文本。
+      pt_BR: When enabled, show token/cost usage summary in the chat output.
+      ja_JP: 有効にすると、トークン/費用の使用量サマリをチャットに表示します。
+    llm_description: Toggle whether to output token/cost usage text to the frontend.
+    form: form
 extra:
   python:
     source: tools/mini_claw.py

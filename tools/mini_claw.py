@@ -48,6 +48,15 @@ from utils.mini_claw_storage import (
 from utils.mini_claw_uploads import _build_uploads_context
 from utils.mini_claw_prompt import build_system_prompt_content
 from utils.mini_claw_hooks import DailyWriteContext, MemoryWriteContext, filter_memory_write, should_write_daily
+from utils.mini_claw_usage import LLMUsageAccumulator
+from utils.mini_claw_exec_grants import (
+    add_allow_entry,
+    build_exec_override_from_grants,
+    parse_exec_approval_reply,
+)
+from utils.mini_claw_stream import stream_text_to_user
+from utils.mini_claw_assets import persist_llm_assets, redact_user_visible_text
+from utils.mini_claw_agent_header import build_agent_tag_header
 
 from dify_plugin import Tool
 from dify_plugin.entities.model.message import (
@@ -73,114 +82,28 @@ class SkillAgentTool(Tool):
             if tool_parameters.get("exec_approval_enabled") is not None
             else True
         )
+        show_usage_text = bool(
+            tool_parameters.get("show_usage_text")
+            if tool_parameters.get("show_usage_text") is not None
+            else False
+        )
 
         memory_turns = int(tool_parameters.get("memory_turns") or 12)
         system_prompt = tool_parameters.get("system_prompt") or "你是一个xxxx"
         skills_root = _detect_skills_root(tool_parameters.get("skills_root"))
+        usage = LLMUsageAccumulator()
 
         if not query or not isinstance(query, str):
+            payload = usage.payload()
+            yield self.create_variable_message("llm_usage", payload)
+            if show_usage_text:
+                yield self.create_text_message(usage.format_text(payload))
             yield self.create_text_message("❌缺少 query 参数\n")
             return
         user_input = str(query)
         started_at = time.time()
         max_tool_turns = 50
         effective_query = str(query)
-
-        def _parse_exec_approval_reply(text: str) -> str | None:
-            s = str(text or "").strip()
-            if not s:
-                return None
-            s2 = s.replace(" ", "").replace("\t", "").replace("\r", "").replace("\n", "")
-            s2 = s2.translate(str.maketrans({"１": "1", "２": "2", "３": "3"}))
-            if s2 == "1":
-                return "once"
-            if s2 == "2":
-                return "always"
-            if s2 == "3":
-                return "deny"
-            return None
-
-        def _coerce_allow_entries(v: Any) -> list[dict[str, Any]]:
-            if not v:
-                return []
-            if isinstance(v, list):
-                out: list[dict[str, Any]] = []
-                for item in v:
-                    if isinstance(item, str) and item.strip():
-                        out.append({"pattern": item.strip()})
-                    elif isinstance(item, dict):
-                        pat = str(item.get("pattern") or "").strip()
-                        if pat:
-                            out.append(dict(item))
-                return out
-            return []
-
-        def _extract_patterns(entries: Any) -> list[str]:
-            out: list[str] = []
-            for e in _coerce_allow_entries(entries):
-                pat = str(e.get("pattern") or "").strip()
-                if pat and pat not in out:
-                    out.append(pat)
-            return out
-
-        def _ensure_path(d: dict[str, Any], keys: list[str]) -> dict[str, Any]:
-            cur: dict[str, Any] = d
-            for k in keys:
-                nxt = cur.get(k)
-                if not isinstance(nxt, dict):
-                    nxt = {}
-                    cur[k] = nxt
-                cur = nxt
-            return cur
-
-        def _add_allow_entry(
-            *,
-            store: dict[str, Any],
-            scope: str,
-            exe: str,
-            pattern: str,
-            skill_name: str | None,
-            command: list[str],
-        ) -> dict[str, Any]:
-            exe0 = str(exe or "").strip()
-            pat0 = str(pattern or "").strip()
-            if not exe0 or not pat0:
-                return store
-            now_ts = int(time.time())
-            root = _ensure_path(store, ["exec"])
-            bucket = _ensure_path(root, ["allow"])
-            items = bucket.get(exe0)
-            entries = _coerce_allow_entries(items)
-            existing = next((e for e in entries if str(e.get("pattern") or "").strip() == pat0), None)
-            if existing is None:
-                existing = {"pattern": pat0, "created_at": now_ts}
-                entries.append(existing)
-            existing["last_used_at"] = now_ts
-            existing["last_used_command"] = " ".join([str(x) for x in (command or [])])[:500]
-            entries = entries[-200:]
-            bucket[exe0] = entries
-            return store
-
-        def _build_exec_override_from_grants(
-            *,
-            tool_name: str,
-            skill_name: str | None,
-            requested_command: list[str],
-            exe0: str,
-        ) -> dict[str, Any] | None:
-            if not exe0:
-                return None
-            has_entry = False
-            exec_cfg = grants.get("exec") if isinstance(grants.get("exec"), dict) else {}
-            allow = exec_cfg.get("allow")
-            if isinstance(allow, dict) and _coerce_allow_entries(allow.get(exe0)):
-                has_entry = True
-            if not has_entry:
-                return None
-            return {
-                "exe": exe0,
-                "allow_not_in_allowlist": True,
-            }
 
         def invoke_llm_text_simple(prompt_messages: list[Any]) -> str:
             try:
@@ -208,6 +131,7 @@ class SkillAgentTool(Tool):
             except Exception as e:
                 _dbg(f"onboarding_extract_invoke_failed err={_shorten_text(str(e), 500)}")
                 return ""
+            usage.record_response(resp)
 
             if _safe_get(resp, "message") is not None:
                 msg = _safe_get(resp, "message") or {}
@@ -221,6 +145,7 @@ class SkillAgentTool(Tool):
             chunks: list[str] = []
             try:
                 for chunk in resp:
+                    usage.record_chunk(chunk)
                     delta = _safe_get(chunk, "delta") or {}
                     msg = _safe_get(delta, "message") or {}
                     content = _safe_get(msg, "content")
@@ -284,7 +209,7 @@ class SkillAgentTool(Tool):
                     exec_once_allowed = approval_state if isinstance(approval_state, dict) else None
                     approval_context = "\n\n[审批结果]\n已关闭执行审批：自动放行上一轮命令。\n"
                 else:
-                    decision = _parse_exec_approval_reply(user_input)
+                    decision = parse_exec_approval_reply(user_input)
                     if decision == "deny":
                         _storage_set_json(storage, approval_pending_key, None)
                         yield self.create_text_message("🤝已收到你的拒绝，本次不会执行需要审批的操作。\n")
@@ -296,7 +221,7 @@ class SkillAgentTool(Tool):
                         cmd = approval_state.get("command") if isinstance(approval_state.get("command"), list) else []
 
                         if decision == "always":
-                            _add_allow_entry(
+                            add_allow_entry(
                                 store=next_grants,
                                 scope="always",
                                 exe=exe0,
@@ -917,6 +842,7 @@ class SkillAgentTool(Tool):
                     )
             except Exception:
                 return ""
+            usage.record_response(resp)
 
             if _safe_get(resp, "message") is not None:
                 msg = _safe_get(resp, "message") or {}
@@ -930,6 +856,7 @@ class SkillAgentTool(Tool):
             chunks: list[str] = []
             try:
                 for chunk in resp:
+                    usage.record_chunk(chunk)
                     delta = _safe_get(chunk, "delta") or {}
                     msg = _safe_get(delta, "message") or {}
                     content = _safe_get(msg, "content")
@@ -1157,133 +1084,7 @@ class SkillAgentTool(Tool):
         empty_responses = 0
         saved_asset_fingerprints: set[str] = set()
         final_text_already_streamed = False
-
-        def stream_text_to_user(text: str, chunk_size: int = 8) -> Generator[ToolInvokeMessage]:
-            s = (text or "").strip()
-            if not s:
-                return
-            step = max(1, int(chunk_size))
-            for i in range(0, len(s), step):
-                yield self.create_text_message(s[i : i + step])
-
-        def redact_user_visible_text(text: str) -> str:
-            s = str(text or "")
-            if not s:
-                return s
-            for p in [session_dir, skills_root]:
-                if p and isinstance(p, str):
-                    s = s.replace(p, "<REDACTED_PATH>")
-                    s = s.replace(p.replace("\\", "/"), "<REDACTED_PATH>")
-            s = re.sub(r"[A-Za-z]:\\[^\s\r\n\t\"']+", "<REDACTED_PATH>", s)
-            s = re.sub(r"/[^\s\r\n\t\"']+", "<REDACTED_PATH>", s)
-            return s
-
-        def persist_llm_assets(parts: Any) -> list[str]:
-            if not parts or not isinstance(parts, list):
-                return []
-            saved: list[str] = []
-            out_dir = _safe_join(session_dir, "llm_assets")
-            os.makedirs(out_dir, exist_ok=True)
-            for i, item in enumerate(parts):
-                if not isinstance(item, dict):
-                    continue
-                item_type = str(item.get("type") or "")
-                if item_type not in {"image", "document", "audio", "video"}:
-                    continue
-                mime = str(item.get("mime_type") or "")
-                filename = str(item.get("filename") or "").strip()
-                url = str(item.get("url") or item.get("data") or "").strip()
-                b64 = str(item.get("base64_data") or "").strip()
-                raw: bytes | None = None
-                if b64:
-                    try:
-                        raw = base64.b64decode(b64, validate=False)
-                    except Exception:
-                        raw = None
-                if raw is None and url.startswith("data:") and ";base64," in url:
-                    try:
-                        header, payload = url.split(";base64,", 1)
-                        if not mime and header.startswith("data:"):
-                            mime = header[5:]
-                        raw = base64.b64decode(payload, validate=False)
-                    except Exception:
-                        raw = None
-                if raw is None:
-                    continue
-                try:
-                    fp = hashlib.sha1(raw).hexdigest()
-                    key = f"{item_type}|{mime}|{fp}"
-                except Exception:
-                    key = f"{item_type}|{mime}|{len(raw)}"
-                if key in saved_asset_fingerprints:
-                    continue
-                saved_asset_fingerprints.add(key)
-                if not filename:
-                    ext = ""
-                    if mime:
-                        if "png" in mime:
-                            ext = ".png"
-                        elif "jpeg" in mime or "jpg" in mime:
-                            ext = ".jpg"
-                        elif "pdf" in mime:
-                            ext = ".pdf"
-                        elif "json" in mime:
-                            ext = ".json"
-                        elif "text" in mime or "markdown" in mime:
-                            ext = ".txt"
-                    filename = f"{item_type}-{i+1}{ext or ''}"
-                dst = _safe_join(out_dir, filename)
-                if os.path.exists(dst):
-                    base, ext = os.path.splitext(filename)
-                    dst = _safe_join(out_dir, f"{base}-{fp[:8] if 'fp' in locals() else uuid.uuid4().hex[:8]}{ext}")
-                try:
-                    with open(dst, "wb") as f:
-                        f.write(raw)
-                    saved.append(os.path.relpath(dst, session_dir))
-                except Exception:
-                    continue
-            return saved
-
-        def build_agent_tag_header() -> str:
-            default_name = "Mini_Claw"
-            default_emoji = "🤖"
-
-            def pick_field(md: str, keys: list[str]) -> str:
-                s = str(md or "")
-                if not s:
-                    return ""
-                for k in keys:
-                    rx = re.compile(
-                        rf"^\s*(?:-\s*)?\*\*\s*{re.escape(k)}\s*:\s*\*\*\s*(.+?)\s*$",
-                        flags=re.M | re.I,
-                    )
-                    m = rx.search(s)
-                    if m:
-                        return str(m.group(1) or "").strip()
-                return ""
-
-            identity_text = ""
-            try:
-                identity_text = _storage_get_text(storage, identity_key).strip()
-            except Exception:
-                identity_text = ""
-            if not identity_text:
-                try:
-                    identity_text = str(identity_md or "").strip()
-                except Exception:
-                    identity_text = ""
-
-            name = pick_field(identity_text, ["Name", "名字", "称呼"])
-            emoji = pick_field(identity_text, ["Emoji", "表情", "签名", "签名Emoji"])
-            name = re.sub(r"\s+", " ", name).strip() if name else ""
-            emoji = re.sub(r"\s+", " ", emoji).strip() if emoji else ""
-            if not name:
-                name = default_name
-            if not emoji:
-                emoji = default_emoji
-            return f"【{emoji}{name}】" if emoji else f"【{name}】"
-
-        agent_tag_header = build_agent_tag_header()
+        agent_tag_header = build_agent_tag_header(storage=storage, identity_key=identity_key, identity_md=identity_md)
 
         def invoke_llm_live(
             *,
@@ -1347,6 +1148,7 @@ class SkillAgentTool(Tool):
                     )
 
                 if _safe_get(response, "message") is not None:
+                    usage.record_response(response)
                     msg = _safe_get(response, "message") or {}
                     content = _safe_get(msg, "content")
                     text, parts = _split_message_content(content)
@@ -1365,6 +1167,7 @@ class SkillAgentTool(Tool):
                     return combined_text, tool_calls_all, nontext_content, chunks_count, streamed_any
 
                 for chunk in response:
+                    usage.record_chunk(chunk)
                     chunks_count += 1
                     delta = _safe_get(chunk, "delta") or {}
                     msg = _safe_get(delta, "message") or {}
@@ -1522,7 +1325,9 @@ class SkillAgentTool(Tool):
                     f"nontext={_shorten_text(nontext, 200) if nontext else ''}"
                 )
                 if nontext:
-                    saved_assets = persist_llm_assets(nontext)
+                    saved_assets = persist_llm_assets(
+                        parts=nontext, session_dir=session_dir, saved_asset_fingerprints=saved_asset_fingerprints
+                    )
                     if saved_assets:
                         _dbg(f"nontext_assets_saved={len(saved_assets)} paths={_shorten_text(saved_assets, 300)}")
                 if tool_calls:
@@ -1774,7 +1579,8 @@ class SkillAgentTool(Tool):
                                     "path_allowlist": exec_once_allowed.get("path_allowlist") if isinstance(exec_once_allowed.get("path_allowlist"), list) else [],
                                 }
                             if exec_override is None:
-                                exec_override = _build_exec_override_from_grants(
+                                exec_override = build_exec_override_from_grants(
+                                    grants=grants,
                                     tool_name=tool_name,
                                     skill_name=str(arguments.get("skill_name") or "").strip() or None,
                                     requested_command=requested_command,
@@ -1840,7 +1646,14 @@ class SkillAgentTool(Tool):
                                 stderr = str(result.get("stderr") or "").strip()
                                 if stderr:
                                     yield self.create_text_message(
-                                        "❌命令执行失败（stderr）：\n" + _shorten_text(redact_user_visible_text(stderr), 1200) + "\n"
+                                        "❌命令执行失败（stderr）：\n"
+                                        + _shorten_text(
+                                            redact_user_visible_text(
+                                                text=stderr, session_dir=session_dir, skills_root=skills_root
+                                            ),
+                                            1200,
+                                        )
+                                        + "\n"
                                     )
                             if isinstance(result, dict) and result.get("error") == "no_executable_found":
                                 skill = str(result.get("skill") or arguments.get("skill_name") or "")
@@ -2072,7 +1885,9 @@ class SkillAgentTool(Tool):
                                     onboarding_key,
                                     {"stage": 2, "completed": True, "updated_at": int(time.time())},
                                 )
-                                agent_tag_header = build_agent_tag_header()
+                                agent_tag_header = build_agent_tag_header(
+                                    storage=storage, identity_key=identity_key, identity_md=identity_md
+                                )
 
                             result = {
                                 "ok": True,
@@ -2171,7 +1986,8 @@ class SkillAgentTool(Tool):
                                     "path_allowlist": exec_once_allowed.get("path_allowlist") if isinstance(exec_once_allowed.get("path_allowlist"), list) else [],
                                 }
                             if exec_override is None:
-                                exec_override = _build_exec_override_from_grants(
+                                exec_override = build_exec_override_from_grants(
+                                    grants=grants,
                                     tool_name=tool_name,
                                     skill_name=None,
                                     requested_command=requested_command,
@@ -2235,7 +2051,14 @@ class SkillAgentTool(Tool):
                                 stderr = str(result.get("stderr") or "").strip()
                                 if stderr:
                                     yield self.create_text_message(
-                                        "❌命令执行失败（stderr）：\n" + _shorten_text(redact_user_visible_text(stderr), 1200) + "\n"
+                                        "❌命令执行失败（stderr）：\n"
+                                        + _shorten_text(
+                                            redact_user_visible_text(
+                                                text=stderr, session_dir=session_dir, skills_root=skills_root
+                                            ),
+                                            1200,
+                                        )
+                                        + "\n"
                                     )
                         elif tool_name == "export_temp_file":
                             temp_rel = str(arguments.get("temp_relative_path") or "")
@@ -2451,7 +2274,7 @@ class SkillAgentTool(Tool):
                     assistant_text=assistant_text_for_history,
                 )
                 if not final_text_already_streamed:
-                    yield from stream_text_to_user(final_text)
+                    yield from stream_text_to_user(create_text_message=self.create_text_message, text=final_text)
             elif files_to_send:
                 assistant_text_for_history = "已生成文件。"
                 _append_history_turn(
@@ -2460,7 +2283,7 @@ class SkillAgentTool(Tool):
                     user_text=user_input,
                     assistant_text=assistant_text_for_history,
                 )
-                yield from stream_text_to_user("已生成文件。")
+                yield from stream_text_to_user(create_text_message=self.create_text_message, text="已生成文件。")
             elif has_any_files:
                 assistant_text_for_history = "已生成中间文件，但未调用 export_temp_file 标记交付文件。"
                 _append_history_turn(
@@ -2469,7 +2292,10 @@ class SkillAgentTool(Tool):
                     user_text=user_input,
                     assistant_text=assistant_text_for_history,
                 )
-                yield from stream_text_to_user("已生成中间文件，但未调用 export_temp_file 标记交付文件。")
+                yield from stream_text_to_user(
+                    create_text_message=self.create_text_message,
+                    text="已生成中间文件，但未调用 export_temp_file 标记交付文件。",
+                )
             else:
                 assistant_text_for_history = "未生成任何文本或文件输出。"
                 _append_history_turn(
@@ -2478,7 +2304,15 @@ class SkillAgentTool(Tool):
                     user_text=user_input,
                     assistant_text=assistant_text_for_history,
                 )
-                yield from stream_text_to_user("未生成任何文本或文件输出。")
+                yield from stream_text_to_user(
+                    create_text_message=self.create_text_message,
+                    text="未生成任何文本或文件输出。",
+                )
+
+            payload = usage.payload()
+            yield self.create_variable_message("llm_usage", payload)
+            if show_usage_text:
+                yield self.create_text_message(usage.format_text(payload))
 
             try:
                 if should_write_daily(

@@ -342,20 +342,57 @@ def _safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
                 shutil.copyfileobj(src, dst)
 
 
+def _find_skill_md_path(folder: Path) -> Path | None:
+    try:
+        direct = folder / "SKILL.md"
+        if direct.is_file():
+            return direct
+    except Exception:
+        pass
+    try:
+        for p in folder.iterdir():
+            if p.is_file() and p.name.lower() == "skill.md":
+                return p
+    except Exception:
+        return None
+    return None
+
+
+def _normalize_skill_md_filename(folder: Path) -> None:
+    md = _find_skill_md_path(folder)
+    if not md:
+        return
+    if md.name == "SKILL.md":
+        return
+    target = folder / "SKILL.md"
+    try:
+        if target.exists():
+            return
+    except Exception:
+        return
+    tmp = folder / f"._skill_md_rename_{uuid.uuid4().hex}.tmp"
+    try:
+        md.rename(tmp)
+        tmp.rename(target)
+    except Exception:
+        try:
+            if tmp.exists():
+                tmp.rename(md)
+        except Exception:
+            pass
+
+
 def _find_skill_folders(extracted_root: Path) -> list[Path]:
+    if _find_skill_md_path(extracted_root):
+        return [extracted_root]
     candidates: list[Path] = []
     for p in extracted_root.iterdir():
         if p.is_dir():
             candidates.append(p)
     if candidates:
-        with_skill_md = [p for p in candidates if (p / "SKILL.md").is_file()]
+        with_skill_md = [p for p in candidates if _find_skill_md_path(p)]
         if with_skill_md:
             return with_skill_md
-        if len(candidates) == 1:
-            return candidates
-        return candidates
-    if (extracted_root / "SKILL.md").is_file():
-        return [extracted_root]
     return []
 
 
@@ -557,8 +594,9 @@ class TMTool(Tool):
                         return
 
                     for folder in skill_folders:
+                        _normalize_skill_md_filename(folder)
                         target_name = folder.name
-                        if folder.resolve() == extract_dir.resolve() and (extract_dir / "SKILL.md").is_file():
+                        if folder.resolve() == extract_dir.resolve() and _find_skill_md_path(extract_dir):
                             target_name = _safe_skill_folder_name(Path(filename).stem)
                         target = skills_dir / target_name
                         if target.exists():

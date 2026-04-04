@@ -22,6 +22,7 @@ EXEC_ALLOWED_BINS = {
     "cp",
     "mv",
     "ls",
+    "curl",
 }
 EXEC_TRUSTED_DIR_PREFIXES = (
     "/usr/bin/",
