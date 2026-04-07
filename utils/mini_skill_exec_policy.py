@@ -5,8 +5,8 @@ import os
 import sys
 from typing import Any
 
-from utils.mini_claw_constants import EXEC_ALLOWED_BINS, EXEC_TRUSTED_DIR_PREFIXES
-from utils.mini_claw_exec import _missing_executable_hint, _resolve_executable
+from utils.mini_skill_constants import EXEC_ALLOWED_BINS, EXEC_TRUSTED_DIR_PREFIXES
+from utils.mini_skill_exec import _missing_executable_hint, _resolve_executable
 
 
 def _is_under_prefixes(path: str, prefixes: tuple[str, ...]) -> bool:

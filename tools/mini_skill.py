@@ -26,11 +26,11 @@ from utils.tools import (
     _split_message_content,
  )
 
-from utils.mini_claw_debug import _dbg, _model_brief
-from utils.mini_claw_exec import _cleanup_old_temp_sessions, _detect_skills_root
-from utils.mini_claw_runtime import _AgentRuntime
-from utils.mini_claw_schemas import TOOL_SCHEMAS, _tool_call_retry_prompt, _validate_tool_arguments
-from utils.mini_claw_storage import (
+from utils.mini_skill_debug import _dbg, _model_brief
+from utils.mini_skill_exec import _cleanup_old_temp_sessions, _detect_skills_root
+from utils.mini_skill_runtime import _AgentRuntime
+from utils.mini_skill_schemas import TOOL_SCHEMAS, _tool_call_retry_prompt, _validate_tool_arguments
+from utils.mini_skill_storage import (
     _append_history_turn,
     _get_approval_storage_key,
     _get_conversation_approval_storage_key,
@@ -45,18 +45,18 @@ from utils.mini_claw_storage import (
     _storage_set_json,
     _storage_set_text,
 )
-from utils.mini_claw_uploads import _build_uploads_context
-from utils.mini_claw_prompt import build_system_prompt_content
-from utils.mini_claw_hooks import DailyWriteContext, MemoryWriteContext, filter_memory_write, should_write_daily
-from utils.mini_claw_usage import LLMUsageAccumulator
-from utils.mini_claw_exec_grants import (
+from utils.mini_skill_uploads import _build_uploads_context
+from utils.mini_skill_prompt import build_system_prompt_content
+from utils.mini_skill_hooks import DailyWriteContext, MemoryWriteContext, filter_memory_write, should_write_daily
+from utils.mini_skill_usage import LLMUsageAccumulator
+from utils.mini_skill_exec_grants import (
     add_allow_entry,
     build_exec_override_from_grants,
     parse_exec_approval_reply,
 )
-from utils.mini_claw_stream import stream_text_to_user
-from utils.mini_claw_assets import persist_llm_assets, redact_user_visible_text
-from utils.mini_claw_agent_header import build_agent_tag_header
+from utils.mini_skill_stream import stream_text_to_user
+from utils.mini_skill_assets import persist_llm_assets, redact_user_visible_text
+from utils.mini_skill_agent_header import build_agent_tag_header
 
 from dify_plugin import Tool
 from dify_plugin.entities.model.message import (
@@ -67,7 +67,7 @@ from dify_plugin.entities.model.message import (
     UserPromptMessage,
 )
 from dify_plugin.entities.tool import ToolInvokeMessage
-from utils.mini_claw_memory import _append_daily_dialogue, _dt_beijing, _reset_role
+from utils.mini_skill_memory import _append_daily_dialogue, _dt_beijing, _reset_role
 
 
 class SkillAgentTool(Tool):
@@ -386,7 +386,7 @@ class SkillAgentTool(Tool):
                     },
                 )
                 yield self.create_text_message(
-                    "你好哇😘，我是你的 AI 助手，基于Dify的Mini Claw。\n"
+                    "你好哇😘，我是你的 AI 助手，基于Dify的Mini Skill。\n"
                     "我们先来认识一下吧。\n\n"
                     "请用一段话回答下面问题（按你喜欢的方式写即可）：\n"
                     "1) 你希望我叫什么名字？\n"

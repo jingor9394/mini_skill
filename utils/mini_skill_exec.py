@@ -9,8 +9,8 @@ import sys
 import time
 from typing import Any
 
-from utils.mini_claw_constants import TEMP_SESSION_PREFIX
-from utils.mini_claw_paths import _is_abs_path
+from utils.mini_skill_constants import TEMP_SESSION_PREFIX
+from utils.mini_skill_paths import _is_abs_path
 
 
 def _detect_skills_root(explicit_path: str | None) -> str | None:

@@ -13,20 +13,20 @@ from datetime import datetime, timezone as _dt_timezone
 from typing import Any
 from importlib import metadata as _importlib_metadata
 
-from utils.mini_claw_exec import (
+from utils.mini_skill_exec import (
     _ensure_python_module,
     _skill_contains_python_module,
 )
-from utils.mini_claw_exec_policy import resolve_and_validate_exec
-from utils.mini_claw_hooks import ExecPolicyContext, apply_exec_policies
-from utils.mini_claw_constants import EXEC_ALLOWED_BINS
-from utils.mini_claw_paths import (
+from utils.mini_skill_exec_policy import resolve_and_validate_exec
+from utils.mini_skill_hooks import ExecPolicyContext, apply_exec_policies
+from utils.mini_skill_constants import EXEC_ALLOWED_BINS
+from utils.mini_skill_paths import (
     _normalize_relative_file_path,
     _rewrite_existing_session_files_to_abs,
     _rewrite_out_arg_to_session_dir,
     _rewrite_uploads_paths_to_session_dir,
 )
-from utils.mini_claw_web_fetch import web_fetch as _web_fetch
+from utils.mini_skill_web_fetch import web_fetch as _web_fetch
 from utils.tools import _list_dir, _parse_frontmatter, _parse_frontmatter_rich, _read_text, _safe_join
 
 
@@ -260,23 +260,23 @@ def build_skills_snapshot(
 
         meta_obj = fm.get("metadata")
         meta_dict = _parse_json_obj(meta_obj)
-        openclaw_meta: dict[str, Any] = {}
-        for k in ("openclaw", "clawdbot"):
+        miniskill_meta: dict[str, Any] = {}
+        for k in ("miniskill"):
             v = meta_dict.get(k)
             if isinstance(v, dict):
-                openclaw_meta = v
+                miniskill_meta = v
                 break
-        if not openclaw_meta and isinstance(meta_dict, dict) and isinstance(meta_dict.get("requires"), dict):
-            openclaw_meta = meta_dict
+        if not miniskill_meta and isinstance(meta_dict, dict) and isinstance(meta_dict.get("requires"), dict):
+            miniskill_meta = meta_dict
 
-        requires = openclaw_meta.get("requires") if isinstance(openclaw_meta, dict) else None
+        requires = miniskill_meta.get("requires") if isinstance(miniskill_meta, dict) else None
         requires_obj = requires if isinstance(requires, dict) else {}
         required_bins = _safe_str_list(requires_obj.get("bins"))
         any_bins = _safe_str_list(requires_obj.get("anyBins") or requires_obj.get("any_bins"))
         required_env = _safe_str_list(requires_obj.get("env"))
-        os_allow = _safe_str_list(openclaw_meta.get("os"))
-        always = bool(openclaw_meta.get("always") is True)
-        install_specs = openclaw_meta.get("install") if isinstance(openclaw_meta, dict) else None
+        os_allow = _safe_str_list(miniskill_meta.get("os"))
+        always = bool(miniskill_meta.get("always") is True)
+        install_specs = miniskill_meta.get("install") if isinstance(miniskill_meta, dict) else None
         install_list = install_specs if isinstance(install_specs, list) else []
 
         allowed_tools = str(fm.get("allowed-tools") or fm.get("allowed_tools") or "").strip()
@@ -360,7 +360,7 @@ def build_skills_snapshot(
                 "name": display_name,
                 "description": description,
                 "skill_md": f"{folder}/SKILL.md",
-                "openclaw": {
+                "miniskill": {
                     "always": always,
                     "os": os_allow,
                     "requires": {

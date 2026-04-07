@@ -1,19 +1,15 @@
 version: 1.2.0
 type: plugin
 author: lfenghx
-name: mini_claw
+name: mini_skill
 label:
-  en_US: Mini_Claw
-  ja_JP: Mini_Claw
-  zh_Hans: Mini_Claw
-  pt_BR: Mini_Claw
+  en_US: Mini_Skill
+  zh_Hans: Mini_Skill
 description:
-  en_US: "A smart, soulful, and more secure version of the mini claw, a growing 'personal/enterprise' assistant that gets smarter with each interaction.【Capable of skill invocation】"
-  zh_Hans: "聪明、有灵魂，更安全的 Dify 版小龙虾，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
-  pt_BR: "SUm mini lagostim com alma, uma versão mais inteligente, mais segura e mais personalizada do mini lagostim.【Capacidade de invocação de habilidades】"
-  ja_JP: "魂のあるミニザリガニ、より賢く、より安全に、よりユーザーに合わせたバージョンのミニザリガニ。【能力：スキルの呼び出し】"
-icon: "claw.svg"
-icon_dark: claw.svg
+  en_US: "A smart, soulful, and more secure version of the mini skill, a growing 'personal/enterprise' assistant that gets smarter with each interaction.【Capable of skill invocation】"
+  zh_Hans: "聪明、有灵魂，更安全的 Dify 版 skill管理 ，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
+icon: "skill.svg"
+icon_dark: skill.svg
 resource:
   memory: 268435456
   permission:
@@ -36,7 +32,7 @@ resource:
       size: 104857600
 plugins:
   tools:
-    - provider/mini_claw.yaml
+    - provider/mini_skill.yaml
 meta:
   version: 1.2.0
   arch:

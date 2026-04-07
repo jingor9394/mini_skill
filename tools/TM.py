@@ -117,12 +117,12 @@ def _find_node_project_dir(skill_dir: Path, *, max_depth: int = 3) -> Path | Non
 
 
 def _is_skill_metadata_uncertain(*, folder: Path, entry: dict[str, Any]) -> bool:
-    openclaw = entry.get("openclaw") if isinstance(entry.get("openclaw"), dict) else {}
-    requires = openclaw.get("requires") if isinstance(openclaw.get("requires"), dict) else {}
+    miniskill = entry.get("miniskill") if isinstance(entry.get("miniskill"), dict) else {}
+    requires = miniskill.get("requires") if isinstance(miniskill.get("requires"), dict) else {}
     req_bins = requires.get("bins") if isinstance(requires.get("bins"), list) else []
     req_any_bins = requires.get("anyBins") if isinstance(requires.get("anyBins"), list) else []
     req_env = requires.get("env") if isinstance(requires.get("env"), list) else []
-    install_list = openclaw.get("install") if isinstance(openclaw.get("install"), list) else []
+    install_list = miniskill.get("install") if isinstance(miniskill.get("install"), list) else []
     has_declared_requires = bool(req_bins or req_any_bins or req_env)
 
     req_txt = folder / "requirements.txt"
@@ -180,7 +180,7 @@ def list_skills_sorted() -> list[Path]:
 
 
 def _load_skills_snapshot(skills_dir: Path) -> dict[str, Any]:
-    from utils.mini_claw_runtime import build_skills_snapshot
+    from utils.mini_skill_runtime import build_skills_snapshot
 
     snapshot = build_skills_snapshot(skills_root=str(skills_dir))
     try:
@@ -207,8 +207,8 @@ def _format_skill_line(*, idx: int, folder: Path, entry: dict[str, Any] | None) 
     miss_js = missing.get("js") if isinstance(missing.get("js"), list) else []
     parts: list[str] = []
     if not os_ok:
-        openclaw = entry.get("openclaw") if isinstance(entry.get("openclaw"), dict) else {}
-        os_allow = openclaw.get("os") if isinstance(openclaw.get("os"), list) else []
+        miniskill = entry.get("miniskill") if isinstance(entry.get("miniskill"), dict) else {}
+        os_allow = miniskill.get("os") if isinstance(miniskill.get("os"), list) else []
         os_allow_str = ",".join([str(x) for x in os_allow if str(x).strip()])
         parts.append(f"不支持当前系统（仅支持：{os_allow_str or '未声明'}）")
     if miss_bins:
@@ -435,8 +435,8 @@ class TMTool(Tool):
                 req = skill_path / "requirements.txt"
                 if req.is_file() and miss_py:
                     py_tasks.append((folder, [sys.executable, "-m", "pip", "install", "-r", str(req)]))
-                openclaw = s.get("openclaw") if isinstance(s.get("openclaw"), dict) else {}
-                install_list = openclaw.get("install") if isinstance(openclaw.get("install"), list) else []
+                miniskill = s.get("miniskill") if isinstance(s.get("miniskill"), dict) else {}
+                install_list = miniskill.get("install") if isinstance(miniskill.get("install"), list) else []
                 for spec in install_list:
                     if not isinstance(spec, dict):
                         continue
@@ -476,7 +476,7 @@ class TMTool(Tool):
 
             if not install_tasks:
                 yield self.create_text_message(
-                    "😑未发现需要安装的依赖（仅对“缺失 Python/Node 依赖”且已满足 metadata.openclaw.requires 的技能执行）。\n"
+                    "😑未发现需要安装的依赖（仅对“缺失 Python/Node 依赖”且已满足 metadata.miniskill.requires 的技能执行）。\n"
                 )
                 yield self.create_text_message(_skills_status_text())
                 return

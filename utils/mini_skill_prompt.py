@@ -5,9 +5,9 @@ import time
 from datetime import timedelta
 from typing import Any
 
-from utils.mini_claw_memory import _dt_beijing
-from utils.mini_claw_storage import _get_memory_storage_key, _storage_get_text
-from utils.mini_claw_hooks import PromptBuildContext, build_prompt_layers
+from utils.mini_skill_memory import _dt_beijing
+from utils.mini_skill_storage import _get_memory_storage_key, _storage_get_text
+from utils.mini_skill_hooks import PromptBuildContext, build_prompt_layers
 
 
 def _xml_escape(text: Any) -> str:
@@ -42,8 +42,8 @@ def build_skills_xml(*, snapshot: dict[str, Any]) -> str:
         eligible = str(bool(status.get("eligible")) if isinstance(status, dict) else False).lower()
         visible = str(bool(status.get("visible")) if isinstance(status, dict) else False).lower()
         os_ok = str(bool(status.get("os_ok")) if isinstance(status, dict) else True).lower()
-        openclaw = s.get("openclaw") if isinstance(s.get("openclaw"), dict) else {}
-        os_allow = ",".join(openclaw.get("os") or []) if isinstance(openclaw, dict) else ""
+        miniskill = s.get("miniskill") if isinstance(s.get("miniskill"), dict) else {}
+        os_allow = ",".join(miniskill.get("os") or []) if isinstance(miniskill, dict) else ""
 
         reason_parts: list[str] = []
         if os_ok == "false":

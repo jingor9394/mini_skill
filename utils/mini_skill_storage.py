@@ -4,7 +4,7 @@ import json
 import time
 from typing import Any
 
-from utils.mini_claw_constants import (
+from utils.mini_skill_constants import (
     APPROVAL_KEY_PREFIX,
     HISTORY_KEY_PREFIX,
     MEMORY_KEY_PREFIX,

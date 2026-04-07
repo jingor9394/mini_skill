@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from utils.mini_claw_storage import _storage_get_text
+from utils.mini_skill_storage import _storage_get_text
 
 
 def build_agent_tag_header(
@@ -11,7 +11,7 @@ def build_agent_tag_header(
     storage: Any,
     identity_key: str,
     identity_md: str | None,
-    default_name: str = "Mini_Claw",
+    default_name: str = "Mini_Skill",
     default_emoji: str = "🤖",
 ) -> str:
     def pick_field(md: str, keys: list[str]) -> str:

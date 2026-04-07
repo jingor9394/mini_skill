@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Callable
 
-from utils.mini_claw_memory import _dt_beijing
-from utils.mini_claw_storage import _get_memory_storage_key, _storage_get_text
+from utils.mini_skill_memory import _dt_beijing
+from utils.mini_skill_storage import _get_memory_storage_key, _storage_get_text
 
 
 @dataclass(frozen=True)

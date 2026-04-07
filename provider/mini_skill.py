@@ -4,7 +4,7 @@ from dify_plugin import ToolProvider
 from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
 
-class MiniClawProvider(ToolProvider):
+class MiniSkillProvider(ToolProvider):
     
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         try:
@@ -20,7 +20,7 @@ class MiniClawProvider(ToolProvider):
     #########################################################################################
     # def _oauth_get_authorization_url(self, redirect_uri: str, system_credentials: Mapping[str, Any]) -> str:
     #     """
-    #     Generate the authorization URL for mini_claw OAuth.
+    #     Generate the authorization URL for mini_skill OAuth.
     #     """
     #     try:
     #         """
