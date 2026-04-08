@@ -261,7 +261,7 @@ def build_skills_snapshot(
         meta_obj = fm.get("metadata")
         meta_dict = _parse_json_obj(meta_obj)
         miniskill_meta: dict[str, Any] = {}
-        for k in ("miniskill"):
+        for k in ("miniskill",):
             v = meta_dict.get(k)
             if isinstance(v, dict):
                 miniskill_meta = v
