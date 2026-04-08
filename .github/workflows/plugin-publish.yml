@@ -58,12 +58,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.get_basic_info.outputs.version }}
-          name: Release v${{ steps.get_basic_info.outputs.version }}
+          name: v${{ steps.get_basic_info.outputs.version }}
           body: |
             Release of ${{ steps.get_basic_info.outputs.plugin_name }} plugin version ${{ steps.get_basic_info.outputs.version }}
-
-            Changes:
-            - Updated plugin package file
           files: ${{ steps.package.outputs.package_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
