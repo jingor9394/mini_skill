@@ -9,7 +9,7 @@ identity:
 description:
   human:
     en_US: "A smart, soulful, and more secure version of the mini skill, a growing 'personal/enterprise' assistant that gets smarter with each interaction.【Capable of skill invocation】"
-    zh_Hans: "聪明、有灵魂，更安全的 Dify 版小龙虾，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
+    zh_Hans: "聪明、有灵魂，更安全的 Dify 版 skill 管理，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
     pt_BR: "SUm mini lagostim com alma, uma versão mais inteligente, mais segura e mais personalizada do mini lagostim.【Capacidade de invocação de habilidades】"
     ja_JP: "魂のあるミニザリガニ、より賢く、より安全に、よりユーザーに合わせたバージョンのミニザリガニ。【能力：スキルの呼び出し】"
   llm: "A smart, soulful, and more secure version of the mini skill, a growing 'personal/enterprise' assistant that gets smarter with each interaction.【Capable of skill invocation】"

@@ -5,9 +5,13 @@ name: mini_skill
 label:
   en_US: Mini_Skill
   zh_Hans: Mini_Skill
+  pt_BR: Mini_Claw
+  ja_JP: Mini_Claw
 description:
   en_US: "A smart, soulful, and more secure version of the mini skill, a growing 'personal/enterprise' assistant that gets smarter with each interaction.【Capable of skill invocation】"
-  zh_Hans: "聪明、有灵魂，更安全的 Dify 版 skill管理 ，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
+  zh_Hans: "聪明、有灵魂，更安全的 Dify 版 skill 管理 ，一个越来越懂你的'个人/企业'贴心助手。【具备skill调用能力】"
+  pt_BR: "SUm mini lagostim com alma, uma versão mais inteligente, mais segura e mais personalizada do mini lagostim.【Capacidade de invocação de habilidades】"
+  ja_JP: "魂のあるミニザリガニ、より賢く、より安全に、よりユーザーに合わせたバージョンのミニザリガニ。【能力：スキルの呼び出し】"
 icon: "skill.svg"
 icon_dark: skill.svg
 resource:
@@ -43,6 +47,4 @@ meta:
     version: "3.12"
     entrypoint: main
   minimum_dify_version: null
-created_at: 2026-03-09T10:33:48.0424403+08:00
-privacy: PRIVACY.md
 verified: false
